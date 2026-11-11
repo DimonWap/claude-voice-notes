@@ -1,0 +1,11 @@
+{
+  "name": "claude-voice-notes",
+  "owner": { "name": "DimonWap" },
+  "plugins": [
+    {
+      "name": "voice-notes",
+      "source": "./",
+      "description": "Speaks the key points of Claude's answers aloud (Haiku picks them, edge-tts reads them)"
+    }
+  ]
+}
