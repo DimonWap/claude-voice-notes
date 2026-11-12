@@ -26,12 +26,15 @@ const VOICES: Record<string, string> = {
   dmitry: 'ru-RU-DmitryNeural',
 }
 
-// Haiku decides whether an answer holds anything worth hearing, and if so says it in one or two lines.
-const PICKER = `Тебе дают ответ ИИ-ассистента пользователю. Реши, есть ли в нём то, что пользователь должен услышать:
-итог сделанной работы, ошибка или проблема, вопрос к пользователю, нужное от него решение или действие, важное предупреждение.
-Если ничего такого нет (промежуточный, проходной или очень короткий ответ) — ответь ровно одним символом: -
-Если есть — 1–2 коротких разговорных предложения по-русски, не больше 30 слов, только самое важное.
-Без кода, путей к файлам, ссылок, команд, markdown и эмодзи. Не пересказывай всё. Говори от первого лица ассистента.`
+// Haiku decides whether an answer holds anything worth hearing, and if so says it in one short sentence.
+const PICKER = `Ответ ассистента. Озвучь только: итог законченной задачи, вопрос или решение от пользователя, блокирующую ошибку.
+Иначе ответь: -
+Формат: одно разговорное предложение по-русски, до 15 слов, от первого лица. Без кода, путей, ссылок, markdown.`
+
+// Answers shorter than this with no question mark are skipped without a model call.
+const MIN_CHARS = 150
+// Only the tail goes to Haiku: the outcome and the question sit at the end of an answer.
+const TAIL_CHARS = 2500
 
 async function voiceOf($: { store: { get: (k: string) => Promise<unknown> } }): Promise<string> {
   const v = await $.store.get('voice')
@@ -77,18 +80,21 @@ export const register: Register = on => {
     // Only the main loop's finished answers; subagents, interruptions and errors stay silent.
     if (e.agentId || e.reason !== 'answer' || !e.answer.trim()) return result
     if ((await $.store.get('enabled')) === false) return result
+    const answer = e.answer.trim()
+    if (answer.length < MIN_CHARS && !answer.includes('?')) return result
 
     const pick = await $.model.complete({
       model: 'haiku',
       system: PICKER,
-      prompt: e.answer.slice(-6000),
-      maxTokens: 200,
+      prompt: answer.slice(-TAIL_CHARS),
+      maxTokens: 60,
     })
     if (!pick.isAnswered) return result
     const say = pick.text.trim()
     if (!say || say === '-' || say.length < 4) return result
 
+    // Voice only: nothing is added beneath the answer.
     speak($, await voiceOf($), say)
-    return { ...result, text: `🔊 ${say}` }
+    return result
   })
 }
